@@ -10,6 +10,6 @@ spec:
     forceDelete: true
     imageTagMutability: MUTABLE
     imageScanningConfiguration:
-      - scanOnPush: true
+      scanOnPush: true
   providerConfigRef:
     name: default
