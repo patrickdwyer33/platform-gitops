@@ -1,0 +1,60 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: appinfra-ecr
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  compositeTypeRef:
+    apiVersion: cloud.patrickdwyer.com/v1alpha1
+    kind: AppInfra
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: repository
+            base:
+              apiVersion: ecr.aws.upbound.io/v1beta2
+              kind: Repository
+              spec:
+                forProvider:
+                  region: us-east-2
+                  forceDelete: true
+                  imageTagMutability: IMMUTABLE
+                  imageScanningConfiguration:
+                    scanOnPush: true
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+          - name: lifecycle-policy
+            base:
+              apiVersion: ecr.aws.upbound.io/v1beta1
+              kind: LifecyclePolicy
+              spec:
+                forProvider:
+                  region: us-east-2
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.repository
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.keepImages
+                toFieldPath: spec.forProvider.policy
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: '{"rules":[{"rulePriority":1,"description":"expire all but the newest images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":%d},"action":{"type":"expire"}}]}'

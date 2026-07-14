@@ -1,0 +1,27 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: appinfras.cloud.patrickdwyer.com
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  scope: Cluster
+  group: cloud.patrickdwyer.com
+  names:
+    kind: AppInfra
+    plural: appinfras
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                keepImages:
+                  type: integer
+                  default: 10
+                  description: Number of images to retain in the ECR repo before expiring the oldest.
