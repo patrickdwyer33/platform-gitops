@@ -41,6 +41,7 @@ spec:
               spec:
                 forProvider:
                   region: us-east-2
+                  policy: '{"rules":[{"rulePriority":1,"description":"expire all but the newest images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
                 providerConfigRef:
                   name: default
             patches:
@@ -50,11 +51,3 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: metadata.name
                 toFieldPath: spec.forProvider.repository
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.keepImages
-                toFieldPath: spec.forProvider.policy
-                transforms:
-                  - type: string
-                    string:
-                      type: Format
-                      fmt: '{"rules":[{"rulePriority":1,"description":"expire all but the newest images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":%d},"action":{"type":"expire"}}]}'

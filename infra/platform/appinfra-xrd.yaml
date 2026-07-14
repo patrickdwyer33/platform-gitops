@@ -20,8 +20,4 @@ spec:
           properties:
             spec:
               type: object
-              properties:
-                keepImages:
-                  type: integer
-                  default: 10
-                  description: Number of images to retain in the ECR repo before expiring the oldest.
+              properties: {}
