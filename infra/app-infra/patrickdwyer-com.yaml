@@ -1,0 +1,8 @@
+apiVersion: cloud.patrickdwyer.com/v1alpha1
+kind: AppInfra
+metadata:
+  name: patrickdwyer-com
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  keepImages: 10
