@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traefik
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "1" }
+spec:
+  project: default
+  source:
+    repoURL: https://traefik.github.io/charts
+    chart: traefik
+    targetRevision: "41.0.2"
+    helm:
+      releaseName: traefik
+      values: |
+        ingressClass:
+          enabled: true
+          isDefaultClass: true
+        ports:
+          web:
+            exposedPort: 80
+            allowACMEByPass: true
+            http:
+              redirections:
+                entryPoint: { to: websecure, scheme: https, permanent: true }
+          websecure:
+            exposedPort: 443
+            http:
+              tls: { enabled: true }
+        service:
+          enabled: true
+          spec:
+            type: LoadBalancer
+          annotations:
+            service.beta.kubernetes.io/aws-load-balancer-type: external
+            service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+            service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+            service.beta.kubernetes.io/aws-load-balancer-attributes: load_balancing.cross_zone.enabled=true
+  destination: { server: https://kubernetes.default.svc, namespace: traefik }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
