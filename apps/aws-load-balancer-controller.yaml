@@ -15,7 +15,11 @@ spec:
       values: |
         clusterName: eks-substrate
         region: us-east-2
-        vpcId: vpc-0069ea2b2bf92b950
+        # ACCOUNT-SPECIFIC. Must match `terraform -chdir=substrate output -raw vpc_id`.
+        # If the cluster is ever rebuilt, this MUST be updated -- the controller
+        # silently evaluates 0 subnets and the Service sits at <pending> forever
+        # with "unable to resolve at least one subnet" in its events.
+        vpcId: vpc-0a46baf000aa1bd0f
         enableServiceMutatorWebhook: false
         serviceAccount:
           create: true
