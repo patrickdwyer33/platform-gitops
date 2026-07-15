@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cwdmdc
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: [dev.cwdmdc.patrickdwyer.com]
+      secretName: cwdmdc-tls
+  rules:
+    - host: dev.cwdmdc.patrickdwyer.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: cwdmdc
+                port: { number: 80 }

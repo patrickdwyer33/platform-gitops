@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cwdmdc
+  labels: { app: cwdmdc }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: cwdmdc } }
+  template:
+    metadata:
+      labels: { app: cwdmdc }
+    spec:
+      containers:
+        - name: nginx
+          image: cwdmdc
+          ports:
+            - containerPort: 8080

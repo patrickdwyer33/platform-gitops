@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: cwdmdc
+spec:
+  selector: { app: cwdmdc }
+  ports:
+    - port: 80
+      targetPort: 8080
