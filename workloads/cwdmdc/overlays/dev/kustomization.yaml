@@ -8,4 +8,4 @@ resources:
 images:
   - name: cwdmdc
     newName: 048751351548.dkr.ecr.us-east-2.amazonaws.com/cwdmdc
-    newTag: 6cfdb82
+    newTag: e6502d7
