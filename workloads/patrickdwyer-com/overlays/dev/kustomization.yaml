@@ -7,5 +7,5 @@ resources:
   - ingress.yaml
 images:
   - name: patrickdwyer-com
-    newName: 618402335678.dkr.ecr.us-east-2.amazonaws.com/patrickdwyer-com
+    newName: 048751351548.dkr.ecr.us-east-2.amazonaws.com/patrickdwyer-com
     newTag: cfd3c0a

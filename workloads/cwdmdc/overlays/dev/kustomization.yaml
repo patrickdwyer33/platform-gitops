@@ -7,5 +7,5 @@ resources:
   - ingress.yaml
 images:
   - name: cwdmdc
-    newName: 618402335678.dkr.ecr.us-east-2.amazonaws.com/cwdmdc
+    newName: 048751351548.dkr.ecr.us-east-2.amazonaws.com/cwdmdc
     newTag: 6cfdb82

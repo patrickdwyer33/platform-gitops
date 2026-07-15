@@ -21,7 +21,7 @@ spec:
           create: true
           name: aws-load-balancer-controller
           annotations:
-            eks.amazonaws.com/role-arn: arn:aws:iam::618402335678:role/aws-load-balancer-controller
+            eks.amazonaws.com/role-arn: arn:aws:iam::048751351548:role/aws-load-balancer-controller
   destination: { server: https://kubernetes.default.svc, namespace: kube-system }
   syncPolicy:
     automated: { prune: true, selfHeal: true }

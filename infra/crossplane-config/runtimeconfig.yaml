@@ -9,4 +9,4 @@ spec:
     metadata:
       name: provider-aws-ecr
       annotations:
-        eks.amazonaws.com/role-arn: arn:aws:iam::618402335678:role/crossplane-provider-aws-ecr-irsa
+        eks.amazonaws.com/role-arn: arn:aws:iam::048751351548:role/crossplane-provider-aws-ecr-irsa

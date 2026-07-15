@@ -1,6 +1,21 @@
 # platform-gitops
 
 Public GitOps repo reconciled by Argo CD into the `eks-substrate` cluster (app-of-apps).
+
+> ### ⚠️ This belongs to AWS account `048751351548` (Patrick's personal account) — and only ever that one.
+>
+> The ARNs and ECR registry URLs below are hardcoded to it. On 2026-07-15 this whole substrate
+> was mistakenly built in a **company** account because a `[default]` AWS profile silently pointed
+> there and nothing objected. It was destroyed and rebuilt here. Before touching the cluster:
+>
+> ```bash
+> aws-switch-personal    # AWS_PROFILE=personal -> 048751351548, prints the account
+> aws-who                # which account am I in?
+> ```
+>
+> `personal` is keyless (`aws login`; temporary creds, ≤12h). If credentials are missing or
+> expired: `aws login --profile personal`. Guards live in the `aws-infra` repo —
+> see its README's "AWS accounts" section.
 - `apps/` — Argo CD Application manifests (the app-of-apps children).
 - `infra/crossplane-config/` — Crossplane core: the `function-patch-and-transform` package, the `provider-aws-ecr` Provider (+ its IRSA `DeploymentRuntimeConfig`), and the `ProviderConfig`.
 - `infra/platform/` — the `AppInfra` platform API: a `cloud.patrickdwyer.com/v1alpha1` XRD plus its Composition, built with `function-patch-and-transform`. Each `AppInfra` composes an ECR repository and a lifecycle policy.
