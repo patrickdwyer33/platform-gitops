@@ -1,3 +1,20 @@
+# ============================================================================
+# AUTHORED, NOT DEPLOYED.
+# There is deliberately NO apps/<site>-prod.yaml Application pointing here.
+# That absence is the mechanism keeping prod undeployed -- it is not an
+# oversight, and adding one is NOT "finishing the job".
+#
+# cwdmdc.patrickdwyer.com is currently served by hosting outside this
+# substrate. Cutover requires moving DNS FIRST, then adding the Application --
+# never the reverse. Deploying this while DNS points elsewhere makes
+# cert-manager's HTTP-01 challenge fail forever and burns the Let's Encrypt
+# failed-validation limit for the ACME account the live dev sites share.
+#
+# Note also: patrickdwyer.com is an apex domain (no CNAME allowed at a zone
+# apex); it works only via Cloudflare's CNAME flattening. And add the DNS
+# record BEFORE deploying -- the AWS VPC resolver negatively-caches NXDOMAIN
+# for up to the SOA minimum TTL (1800s), which stalls issuance.
+# ============================================================================
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: prod

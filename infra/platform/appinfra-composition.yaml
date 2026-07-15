@@ -41,7 +41,7 @@ spec:
               spec:
                 forProvider:
                   region: us-east-2
-                  policy: '{"rules":[{"rulePriority":1,"description":"expire all but the newest images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
+                  policy: '{"rules":[{"rulePriority":1,"description":"expire all but the newest images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":50},"action":{"type":"expire"}}]}'
                 providerConfigRef:
                   name: default
             patches:
