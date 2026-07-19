@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# platform-gitops/deploy -- pin a site's dev overlay to an ECR image tag and
+# protect that image from lifecycle expiry.
+#
+# Usage:
+#   ./deploy <site> [<sha>]
+#     site : patrickdwyer-com | cwdmdc
+#     sha  : optional build tag; if omitted, pick from a menu of recent builds
+#            shown as their commit messages.
+#
+# Runs under Patrick's local AWS creds (aws-switch-personal). Uses aws + git only.
+set -euo pipefail
+
+REGION=us-east-2
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+usage() { echo "usage: ./deploy <patrickdwyer-com|cwdmdc> [<sha>]" >&2; exit 2; }
+
+site_ecr_repo() { case "$1" in
+  patrickdwyer-com) echo patrickdwyer-com ;;
+  cwdmdc)           echo cwdmdc ;;
+  *) return 1 ;; esac; }
+
+site_overlay() { echo "$REPO_ROOT/workloads/$1/overlays/dev/kustomization.yaml"; }
+
+site_src() { case "$1" in
+  patrickdwyer-com) echo "$HOME/dev/athens/sites/patrickdwyer.com" ;;
+  cwdmdc)           echo "$HOME/dev/athens/sites/cwdmdc.patrickdwyer.com" ;;
+  *) return 1 ;; esac; }
+
+# Rewrite the single `newTag:` line. Pure + testable. Portable across BSD (macOS)
+# and GNU sed via a temp file rather than sed -i. `|` delimiter is safe (SHAs and
+# URIs contain no `|`).
+bump_tag() {
+  local file="$1" new="$2" tmp
+  tmp="$(mktemp)"
+  sed "s|^\([[:space:]]*newTag:[[:space:]]*\).*|\1${new}|" "$file" > "$tmp"
+  mv "$tmp" "$file"
+}
+
+# Add the deployed-<sha> protective alias to an existing image, unless it already
+# exists (IMMUTABLE repos reject re-adding a tag). Registry-side manifest copy --
+# no docker, no pull.
+protect_image() {
+  local repo="$1" sha="$2" manifest
+  if aws ecr describe-images --repository-name "$repo" --region "$REGION" \
+       --image-ids imageTag="deployed-$sha" >/dev/null 2>&1; then
+    echo "  already protected: deployed-$sha"; return 0
+  fi
+  manifest="$(aws ecr batch-get-image --repository-name "$repo" --region "$REGION" \
+    --image-ids imageTag="$sha" \
+    --accepted-media-types \
+      "application/vnd.docker.distribution.manifest.v2+json" \
+      "application/vnd.oci.image.manifest.v1+json" \
+    --query 'images[0].imageManifest' --output text)"
+  aws ecr put-image --repository-name "$repo" --region "$REGION" \
+    --image-tag "deployed-$sha" --image-manifest "$manifest" >/dev/null
+  echo "  protected: deployed-$sha"
+}
+
+# Recent build tags, newest first, excluding deployed-* aliases and untagged.
+recent_tags() {
+  aws ecr describe-images --repository-name "$1" --region "$REGION" \
+    --query 'reverse(sort_by(imageDetails,&imagePushedAt))[].imageTags' \
+    --output text 2>/dev/null \
+    | tr '\t' '\n' | grep -vE '^(deployed-|None$)' | grep -v '^$' | head -20
+}
+
+main() {
+  local site="${1:-}" sha="${2:-}"
+  [ -n "$site" ] || usage
+  local repo overlay src
+  repo="$(site_ecr_repo "$site")" || { echo "unknown site: $site" >&2; usage; }
+  overlay="$(site_overlay "$site")"
+  src="$(site_src "$site")"
+  [ -f "$overlay" ] || { echo "overlay not found: $overlay" >&2; exit 1; }
+
+  if [ -z "$sha" ]; then
+    local tags=() t i=1
+    while IFS= read -r t; do tags+=("$t"); done < <(recent_tags "$repo")
+    [ "${#tags[@]}" -gt 0 ] || { echo "no build images in $repo" >&2; exit 1; }
+    echo "Recent builds for $site:"
+    for t in "${tags[@]}"; do
+      local msg
+      msg="$(git -C "$src" log -1 --format='%s (%cr)' "$t" 2>/dev/null || echo '(no local commit)')"
+      printf "  %2d) %-10s %s\n" "$i" "$t" "$msg"; i=$((i+1))
+    done
+    printf "select> "; local pick; read -r pick
+    [[ "$pick" =~ ^[0-9]+$ ]] && [ "$pick" -ge 1 ] && [ "$pick" -le "${#tags[@]}" ] \
+      || { echo "invalid selection" >&2; exit 1; }
+    sha="${tags[$((pick-1))]}"
+  fi
+
+  # The tag must exist, or the pin would ImagePullBackOff.
+  aws ecr describe-images --repository-name "$repo" --region "$REGION" \
+    --image-ids imageTag="$sha" >/dev/null 2>&1 \
+    || { echo "tag '$sha' not found in ECR repo $repo" >&2; exit 1; }
+
+  echo "deploying $site dev -> $sha"
+  protect_image "$repo" "$sha"
+  bump_tag "$overlay" "$sha"
+
+  if git -C "$REPO_ROOT" diff --quiet -- "$overlay"; then
+    echo "  $site dev already pinned to $sha (image protected); nothing to commit"; exit 0
+  fi
+  git -C "$REPO_ROOT" add "$overlay"
+  git -C "$REPO_ROOT" commit -q \
+    -m "deploy($site): dev -> $sha" \
+    -m "$(git -C "$src" log -1 --format='%s' "$sha" 2>/dev/null || true)"
+  git -C "$REPO_ROOT" push -q origin main
+  echo "  pinned + pushed; Argo CD will roll it out."
+}
+
+# Only run main when executed, not when sourced (lets the test source bump_tag).
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then main "$@"; fi
