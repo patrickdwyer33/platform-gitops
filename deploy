@@ -38,14 +38,15 @@ bump_tag() {
   mv "$tmp" "$file"
 }
 
-# Add the deployed-<sha> protective alias to an existing image, unless it already
-# exists (IMMUTABLE repos reject re-adding a tag). Registry-side manifest copy --
-# no docker, no pull.
+# Add the deployed-<env>-<sha> protective alias to an existing image, unless it already
+# exists (IMMUTABLE repos reject re-adding a tag). The env in the tag matters: the ECR
+# lifecycle policy keeps a SEPARATE count budget per env (deployed-prod-* vs deployed-dev-*)
+# so dev churn can never expire a prod pin. Registry-side manifest copy -- no docker, no pull.
 protect_image() {
-  local repo="$1" sha="$2" manifest
+  local repo="$1" sha="$2" env="$3" tag="deployed-${env}-${sha}" manifest
   if aws ecr describe-images --repository-name "$repo" --region "$REGION" \
-       --image-ids imageTag="deployed-$sha" >/dev/null 2>&1; then
-    echo "  already protected: deployed-$sha"; return 0
+       --image-ids imageTag="$tag" >/dev/null 2>&1; then
+    echo "  already protected: $tag"; return 0
   fi
   manifest="$(aws ecr batch-get-image --repository-name "$repo" --region "$REGION" \
     --image-ids imageTag="$sha" \
@@ -54,8 +55,8 @@ protect_image() {
       "application/vnd.oci.image.manifest.v1+json" \
     --query 'images[0].imageManifest' --output text)"
   aws ecr put-image --repository-name "$repo" --region "$REGION" \
-    --image-tag "deployed-$sha" --image-manifest "$manifest" >/dev/null
-  echo "  protected: deployed-$sha"
+    --image-tag "$tag" --image-manifest "$manifest" >/dev/null
+  echo "  protected: $tag"
 }
 
 # Recent build tags, newest first, excluding deployed-* aliases and untagged.
@@ -68,6 +69,9 @@ recent_tags() {
 
 main() {
   local site="${1:-}" sha="${2:-}"
+  # dev-only today. Prod onboarding adds an env arg + a prod overlay path here; the
+  # lifecycle policy already budgets deployed-prod-* separately from deployed-dev-*.
+  local env="dev"
   [ -n "$site" ] || usage
   local repo overlay src
   repo="$(site_ecr_repo "$site")" || { echo "unknown site: $site" >&2; usage; }
@@ -96,8 +100,8 @@ main() {
     --image-ids imageTag="$sha" >/dev/null 2>&1 \
     || { echo "tag '$sha' not found in ECR repo $repo" >&2; exit 1; }
 
-  echo "deploying $site dev -> $sha"
-  protect_image "$repo" "$sha"
+  echo "deploying $site $env -> $sha"
+  protect_image "$repo" "$sha" "$env"
   bump_tag "$overlay" "$sha"
 
   if git -C "$REPO_ROOT" diff --quiet -- "$overlay"; then
