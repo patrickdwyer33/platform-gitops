@@ -4,7 +4,7 @@
 #
 # Usage:
 #   ./deploy <site> [<sha>]
-#     site : patrickdwyer-com | cwdmdc
+#     site : patrickdwyer-com | cwdmdc | draw
 #     sha  : optional build tag; if omitted, pick from a menu of recent builds
 #            shown as their commit messages.
 #
@@ -14,11 +14,12 @@ set -euo pipefail
 REGION=us-east-2
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-usage() { echo "usage: ./deploy <patrickdwyer-com|cwdmdc> [<sha>]" >&2; exit 2; }
+usage() { echo "usage: ./deploy <patrickdwyer-com|cwdmdc|draw> [<sha>]" >&2; exit 2; }
 
 site_ecr_repo() { case "$1" in
   patrickdwyer-com) echo patrickdwyer-com ;;
   cwdmdc)           echo cwdmdc ;;
+  draw)             echo draw ;;
   *) return 1 ;; esac; }
 
 site_overlay() { echo "$REPO_ROOT/workloads/$1/overlays/dev/kustomization.yaml"; }
@@ -26,6 +27,7 @@ site_overlay() { echo "$REPO_ROOT/workloads/$1/overlays/dev/kustomization.yaml";
 site_src() { case "$1" in
   patrickdwyer-com) echo "$HOME/dev/athens/sites/patrickdwyer.com" ;;
   cwdmdc)           echo "$HOME/dev/athens/sites/cwdmdc.patrickdwyer.com" ;;
+  draw)             echo "$HOME/dev/draw.patrickdwyer.com" ;;
   *) return 1 ;; esac; }
 
 # Rewrite the single `newTag:` line. Pure + testable. Portable across BSD (macOS)

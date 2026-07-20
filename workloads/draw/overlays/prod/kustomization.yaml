@@ -1,7 +1,9 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: prod
-nameSuffix: -prod
+# NO nameSuffix: the ServiceAccount must stay `draw` so its IRSA subject is
+# system:serviceaccount:prod:draw, matching the draw-objects role trust policy.
+# (See the dev overlay for the full rationale.)
 resources:
   - ../../base
   - ingress.yaml

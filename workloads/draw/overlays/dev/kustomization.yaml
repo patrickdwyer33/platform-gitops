@@ -1,7 +1,11 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: dev
-nameSuffix: -dev
+# NO nameSuffix (unlike the static sites): the ServiceAccount MUST stay named
+# `draw` so its IRSA token subject is system:serviceaccount:dev:draw, matching the
+# draw-objects role trust policy. A `-dev` suffix would rename the SA to draw-dev,
+# break the subject match, and the pod would get no AWS creds. Namespaces already
+# separate dev/prod, so the suffix is redundant here anyway.
 resources:
   - ../../base
   - ingress.yaml
