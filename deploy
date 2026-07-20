@@ -36,7 +36,10 @@ site_src() { case "$1" in
 bump_tag() {
   local file="$1" new="$2" tmp
   tmp="$(mktemp)"
-  sed "s|^\([[:space:]]*newTag:[[:space:]]*\).*|\1${new}|" "$file" > "$tmp"
+  # QUOTE the tag. An all-digit short SHA (e.g. 0089514) is otherwise parsed as a
+  # YAML number, and kustomize rejects a non-string newTag ("cannot unmarshal
+  # number into ... newTag of type string") -> Argo can't render -> silent no-deploy.
+  sed "s|^\([[:space:]]*newTag:[[:space:]]*\).*|\1\"${new}\"|" "$file" > "$tmp"
   mv "$tmp" "$file"
 }
 
