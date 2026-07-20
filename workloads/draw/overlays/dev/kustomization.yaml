@@ -18,4 +18,4 @@ patches:
 images:
   - name: draw
     newName: 048751351548.dkr.ecr.us-east-2.amazonaws.com/draw
-    newTag: "a2e522d"
+    newTag: "a369e82"
