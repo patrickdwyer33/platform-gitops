@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: draw
+  labels: { app: draw }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: draw } }
+  template:
+    metadata:
+      labels: { app: draw }
+    spec:
+      serviceAccountName: draw
+      containers:
+        - name: draw
+          image: draw
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            # OBJECTS_BUCKET is patched per-environment in each overlay.
+          readinessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+          livenessProbe:
+            httpGet: { path: /api/health, port: 3000 }

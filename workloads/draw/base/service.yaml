@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: draw
+spec:
+  selector: { app: draw }
+  ports:
+    - port: 80
+      targetPort: 3000
