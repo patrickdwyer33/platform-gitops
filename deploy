@@ -3,10 +3,13 @@
 # protect that image from lifecycle expiry.
 #
 # Usage:
-#   ./deploy <site> [<sha>]
-#     site : patrickdwyer-com | cwdmdc | draw
-#     sha  : optional build tag; if omitted, pick from a menu of recent builds
-#            shown as their commit messages.
+#   ./deploy <site> [<sha>] [--prod]
+#     site   : patrickdwyer-com | cwdmdc | draw
+#     sha    : optional build tag; if omitted, pick from a menu of recent builds
+#              shown as their commit messages.
+#     --prod : target the prod overlay. Dev is the default and stays the default:
+#              a production deploy should be something you asked for explicitly,
+#              never something you get by forgetting an argument.
 #
 # Runs under Patrick's local AWS creds (aws-switch-personal). Uses aws + git only.
 set -euo pipefail
@@ -14,7 +17,7 @@ set -euo pipefail
 REGION=us-east-2
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-usage() { echo "usage: ./deploy <patrickdwyer-com|cwdmdc|draw> [<sha>]" >&2; exit 2; }
+usage() { echo "usage: ./deploy <patrickdwyer-com|cwdmdc|draw> [<sha>] [--prod]" >&2; exit 2; }
 
 site_ecr_repo() { case "$1" in
   patrickdwyer-com) echo patrickdwyer-com ;;
@@ -22,7 +25,7 @@ site_ecr_repo() { case "$1" in
   draw)             echo draw ;;
   *) return 1 ;; esac; }
 
-site_overlay() { echo "$REPO_ROOT/workloads/$1/overlays/dev/kustomization.yaml"; }
+site_overlay() { echo "$REPO_ROOT/workloads/$1/overlays/$2/kustomization.yaml"; }
 
 site_src() { case "$1" in
   patrickdwyer-com) echo "$HOME/dev/athens/sites/patrickdwyer.com" ;;
@@ -73,14 +76,19 @@ recent_tags() {
 }
 
 main() {
-  local site="${1:-}" sha="${2:-}"
-  # dev-only today. Prod onboarding adds an env arg + a prod overlay path here; the
-  # lifecycle policy already budgets deployed-prod-* separately from deployed-dev-*.
-  local env="dev"
+  local site="" sha="" env="dev" arg
+  for arg in "$@"; do
+    case "$arg" in
+      --prod) env="prod" ;;
+      --dev)  env="dev" ;;
+      -*)     echo "unknown flag: $arg" >&2; usage ;;
+      *)      if [ -z "$site" ]; then site="$arg"; elif [ -z "$sha" ]; then sha="$arg"; else usage; fi ;;
+    esac
+  done
   [ -n "$site" ] || usage
   local repo overlay src
   repo="$(site_ecr_repo "$site")" || { echo "unknown site: $site" >&2; usage; }
-  overlay="$(site_overlay "$site")"
+  overlay="$(site_overlay "$site" "$env")"
   src="$(site_src "$site")"
   [ -f "$overlay" ] || { echo "overlay not found: $overlay" >&2; exit 1; }
 
@@ -110,11 +118,11 @@ main() {
   bump_tag "$overlay" "$sha"
 
   if git -C "$REPO_ROOT" diff --quiet -- "$overlay"; then
-    echo "  $site dev already pinned to $sha (image protected); nothing to commit"; exit 0
+    echo "  $site $env already pinned to $sha (image protected); nothing to commit"; exit 0
   fi
   git -C "$REPO_ROOT" add "$overlay"
   git -C "$REPO_ROOT" commit -q \
-    -m "deploy($site): dev -> $sha" \
+    -m "deploy($site): $env -> $sha" \
     -m "$(git -C "$src" log -1 --format='%s' "$sha" 2>/dev/null || true)"
   git -C "$REPO_ROOT" push -q origin main
   echo "  pinned + pushed; Argo CD will roll it out."
