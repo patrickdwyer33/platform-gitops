@@ -27,4 +27,13 @@ grep -q 'newName: 048751351548.dkr.ecr.us-east-2.amazonaws.com/patrickdwyer-com'
   || { echo "FAIL: newName line corrupted"; fail=1; }
 
 rm -f "$fixture"
+
+# classify_ecr_error: a genuine missing tag must be distinguishable from any
+# other AWS failure, so an expired session never reads as "tag not found".
+notfound_msg='An error occurred (ImageNotFoundException) when calling the DescribeImages operation: ...'
+expired_msg='An error occurred (ExpiredTokenException) when calling the DescribeImages operation: The security token included in the request is expired'
+[ "$(classify_ecr_error "$notfound_msg")" = notfound ] || { echo "FAIL: ImageNotFound not classified as notfound"; fail=1; }
+[ "$(classify_ecr_error "$expired_msg")" = other ]      || { echo "FAIL: expired creds misclassified as notfound"; fail=1; }
+[ "$(classify_ecr_error "Could not connect to the endpoint URL")" = other ] || { echo "FAIL: network error misclassified"; fail=1; }
+
 [ "$fail" -eq 0 ] && echo "PASS" || exit 1

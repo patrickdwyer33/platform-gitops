@@ -67,6 +67,19 @@ protect_image() {
   echo "  protected: $tag"
 }
 
+# Classify a failed `aws ecr describe-images` from its stderr text. Pure and
+# testable: keeps the "is this really a missing tag?" decision out of the call
+# site. describe-images exits nonzero both when the tag is absent AND when the
+# call never ran (expired creds, wrong region, no network) — collapsing those
+# into "tag not found" has twice sent us debugging a deploy that was really an
+# auth failure.
+classify_ecr_error() {
+  case "$1" in
+    *ImageNotFoundException*) echo notfound ;;
+    *)                        echo other ;;
+  esac
+}
+
 # Recent build tags, newest first, excluding deployed-* aliases and untagged.
 recent_tags() {
   aws ecr describe-images --repository-name "$1" --region "$REGION" \
@@ -92,6 +105,17 @@ main() {
   src="$(site_src "$site")"
   [ -f "$overlay" ] || { echo "overlay not found: $overlay" >&2; exit 1; }
 
+  # Preflight the credentials ONCE, up front. Without this an expired session
+  # resurfaces downstream disguised — as "tag not found" at the existence check,
+  # or as an empty build menu — and you debug the wrong thing. Fail here, clearly.
+  local ident
+  if ! ident="$(aws sts get-caller-identity --query Arn --output text 2>&1)"; then
+    echo "AWS credentials are not usable — this is NOT a deploy problem:" >&2
+    printf '  %s\n' "$ident" >&2
+    echo "Re-authenticate (e.g. aws login --profile personal && aws-switch-personal) and retry." >&2
+    exit 1
+  fi
+
   if [ -z "$sha" ]; then
     local tags=() t i=1
     while IFS= read -r t; do tags+=("$t"); done < <(recent_tags "$repo")
@@ -108,10 +132,20 @@ main() {
     sha="${tags[$((pick-1))]}"
   fi
 
-  # The tag must exist, or the pin would ImagePullBackOff.
-  aws ecr describe-images --repository-name "$repo" --region "$REGION" \
-    --image-ids imageTag="$sha" >/dev/null 2>&1 \
-    || { echo "tag '$sha' not found in ECR repo $repo" >&2; exit 1; }
+  # The tag must exist, or the pin would ImagePullBackOff. Capture stderr (the
+  # `2>&1 >/dev/null` order keeps only stderr) and classify it, so a genuine
+  # missing tag reads as such while any other AWS failure surfaces verbatim
+  # rather than masquerading as one.
+  local ecr_err
+  if ! ecr_err="$(aws ecr describe-images --repository-name "$repo" --region "$REGION" \
+       --image-ids imageTag="$sha" 2>&1 >/dev/null)"; then
+    case "$(classify_ecr_error "$ecr_err")" in
+      notfound) echo "tag '$sha' not found in ECR repo $repo" >&2 ;;
+      *) echo "ECR lookup for '$sha' failed (this is NOT a missing tag):" >&2
+         printf '  %s\n' "$ecr_err" >&2 ;;
+    esac
+    exit 1
+  fi
 
   echo "deploying $site $env -> $sha"
   protect_image "$repo" "$sha" "$env"
