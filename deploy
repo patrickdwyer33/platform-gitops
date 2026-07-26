@@ -31,7 +31,7 @@ site_overlay() { echo "$REPO_ROOT/workloads/$1/overlays/$2/kustomization.yaml"; 
 site_src() { case "$1" in
   patrickdwyer-com) echo "$HOME/dev/athens/sites/patrickdwyer.com" ;;
   cwdmdc)           echo "$HOME/dev/athens/sites/cwdmdc.patrickdwyer.com" ;;
-  draw)             echo "$HOME/dev/draw.patrickdwyer.com" ;;
+  draw)             echo "$HOME/dev/athens/sites/draw.patrickdwyer.com" ;;
   todo)             echo "$HOME/dev/athens/sites/todo.patrickdwyer.com" ;;
   *) return 1 ;; esac; }
 
