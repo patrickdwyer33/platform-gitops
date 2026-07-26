@@ -4,7 +4,7 @@
 #
 # Usage:
 #   ./deploy <site> [<sha>] [--prod]
-#     site   : patrickdwyer-com | cwdmdc | draw
+#     site   : patrickdwyer-com | cwdmdc | draw | todo
 #     sha    : optional build tag; if omitted, pick from a menu of recent builds
 #              shown as their commit messages.
 #     --prod : target the prod overlay. Dev is the default and stays the default:
@@ -17,12 +17,13 @@ set -euo pipefail
 REGION=us-east-2
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-usage() { echo "usage: ./deploy <patrickdwyer-com|cwdmdc|draw> [<sha>] [--prod]" >&2; exit 2; }
+usage() { echo "usage: ./deploy <patrickdwyer-com|cwdmdc|draw|todo> [<sha>] [--prod]" >&2; exit 2; }
 
 site_ecr_repo() { case "$1" in
   patrickdwyer-com) echo patrickdwyer-com ;;
   cwdmdc)           echo cwdmdc ;;
   draw)             echo draw ;;
+  todo)             echo todo ;;
   *) return 1 ;; esac; }
 
 site_overlay() { echo "$REPO_ROOT/workloads/$1/overlays/$2/kustomization.yaml"; }
@@ -31,6 +32,7 @@ site_src() { case "$1" in
   patrickdwyer-com) echo "$HOME/dev/athens/sites/patrickdwyer.com" ;;
   cwdmdc)           echo "$HOME/dev/athens/sites/cwdmdc.patrickdwyer.com" ;;
   draw)             echo "$HOME/dev/draw.patrickdwyer.com" ;;
+  todo)             echo "$HOME/dev/athens/sites/todo.patrickdwyer.com" ;;
   *) return 1 ;; esac; }
 
 # Rewrite the single `newTag:` line. Pure + testable. Portable across BSD (macOS)

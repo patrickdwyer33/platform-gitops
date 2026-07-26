@@ -18,8 +18,8 @@ Public GitOps repo reconciled by Argo CD into the `eks-substrate` cluster (app-o
 > see its README's "AWS accounts" section.
 ## Layout
 
-- `apps/` — Argo CD Application manifests (the app-of-apps children): the ingress stack (`aws-load-balancer-controller`, `cert-manager`, `cert-manager-config`, `traefik`) and one `<site>-dev` app per site. No prod apps exist (see below).
-- `workloads/<site>/` — Kustomize base plus `dev`/`prod` overlays per site. Each overlay pins an ECR image by `newTag`. Only `dev` has a matching Argo CD Application in `apps/`; `prod` overlays are authored but deliberately left undeployed (see the header comment in each `overlays/prod/kustomization.yaml`).
+- `apps/` — Argo CD Application manifests (the app-of-apps children): the ingress stack (`aws-load-balancer-controller`, `cert-manager`, `cert-manager-config`, `traefik`) plus per-site apps: every site has a `-dev` app; draw and todo also run `-prod` apps. The static sites' prod overlays stay authored-but-undeployed (no `apps/<site>-prod.yaml`).
+- `workloads/<site>/` — Kustomize base plus `dev`/`prod` overlays per site. Each overlay pins an ECR image by `newTag`. `draw` and `todo` have matching Argo CD Applications in `apps/` for both `dev` and `prod`; the static sites remain dev-only — their `prod` overlays are authored but deliberately left undeployed (see the header comment in each `overlays/prod/kustomization.yaml`).
 - `deploy` — the deploy tool (bash). `./deploy <site> [<sha>]` picks a built image from ECR (the menu shows each tag's commit message), adds a `deployed-<env>-<sha>` protective tag, rewrites the dev overlay's `newTag`, and commits + pushes — Argo CD then rolls dev. `deploy.test.sh` unit-tests its `bump_tag`. **This is the only supported deploy path** — hand-editing an overlay skips the lifecycle protection (see below).
 
 ## Where images come from

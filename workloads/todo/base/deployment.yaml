@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todo
+  labels: { app: todo }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: todo } }
+  template:
+    metadata:
+      labels: { app: todo }
+    spec:
+      serviceAccountName: todo
+      containers:
+        - name: todo
+          image: todo
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: TZ
+              value: America/Chicago
+            - name: AWS_REGION
+              value: us-east-2
+            - name: VAPID_SUBJECT
+              value: mailto:patrick@patrickdwyer.com
+            # OBJECTS_BUCKET is patched per-environment in each overlay.
+          envFrom:
+            - secretRef:
+                name: todo-secrets  # created manually per namespace (see the app repo README runbook; Vault is the declared destination — aws-infra/FUTURESTATE.md)
+          readinessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+          livenessProbe:
+            httpGet: { path: /api/health, port: 3000 }
