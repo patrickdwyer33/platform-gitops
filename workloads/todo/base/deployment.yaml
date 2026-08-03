@@ -28,7 +28,7 @@ spec:
             # OBJECTS_BUCKET is patched per-environment in each overlay.
           envFrom:
             - secretRef:
-                name: todo-secrets  # created manually per namespace (see the app repo README runbook; Vault is the declared destination — aws-infra/FUTURESTATE.md)
+                name: todo-secrets  # created manually per namespace (see the app repo README runbook; Vault is the declared destination — FUTURESTATE.md at the athens root)
           readinessProbe:
             httpGet: { path: /api/health, port: 3000 }
           livenessProbe:
