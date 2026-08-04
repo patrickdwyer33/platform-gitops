@@ -20,6 +20,7 @@ Public GitOps repo reconciled by Argo CD into the `eks-substrate` cluster (app-o
 
 - `apps/` — Argo CD Application manifests (the app-of-apps children): the ingress stack (`aws-load-balancer-controller`, `cert-manager`, `cert-manager-config`, `traefik`), the secrets stack (`storage`, `vault`, `vault-config-operator`, `external-secrets`, `vault-config` — see **Secrets** below), plus per-site apps: every site has a `-dev` app; draw and todo also run `-prod` apps. The static sites' prod overlays stay authored-but-undeployed (no `apps/<site>-prod.yaml`).
 - `workloads/<site>/` — Kustomize base plus `dev`/`prod` overlays per site. Each overlay pins an ECR image by `newTag`. `draw` and `todo` have matching Argo CD Applications in `apps/` for both `dev` and `prod`; the static sites remain dev-only — their `prod` overlays are authored but deliberately left undeployed (see the header comment in each `overlays/prod/kustomization.yaml`).
+- `vault-bootstrap` — one-time Vault ceremonies (bash): `grant` wires the config operator's admin role after `vault operator init`; `migrate` was the original todo-secrets cutover. Day-to-day secret writes don't use it — see **Secrets** below.
 - `deploy` — the deploy tool (bash). `./deploy <site> [<sha>]` picks a built image from ECR (the menu shows each tag's commit message), adds a `deployed-<env>-<sha>` protective tag, rewrites the dev overlay's `newTag`, and commits + pushes — Argo CD then rolls dev. `deploy.test.sh` unit-tests its `bump_tag`. **This is the only supported deploy path** — hand-editing an overlay skips the lifecycle protection (see below).
 
 ## Secrets
@@ -44,7 +45,11 @@ Three things are deliberately manual (the irreducible residue — everything els
    this repo is public.
 
 Rotation = write new values to Vault; ESO refreshes within the hour (`kubectl annotate
-externalsecret ... force-sync=$(date +%s)` to hurry). Full-teardown posture is
+externalsecret ... force-sync=$(date +%s)` to hurry). No standing write credential exists —
+mint a ≤15-min one first via the git-managed `secrets-admin` role:
+`TOKEN=$(kubectl create token vault-admin -n vault-admin --duration=10m)` then
+`kubectl -n vault exec -i vault-0 -- vault write -field=token auth/kubernetes/login
+role=secrets-admin jwt="$TOKEN"` → use as `VAULT_TOKEN` for `vault kv put`. Full-teardown posture is
 **secrets-are-cattle**: Vault data dies with the cluster (teardown.sh deletes the PVC on
 purpose) and is re-created from git + the shared password + cheap re-enrollment; the KMS key
 survives in `bootstrap/` so any raft snapshot ever taken stays restorable.
