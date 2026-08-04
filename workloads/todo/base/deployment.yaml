@@ -28,7 +28,7 @@ spec:
             # OBJECTS_BUCKET is patched per-environment in each overlay.
           envFrom:
             - secretRef:
-                name: todo-secrets  # created manually per namespace (see the app repo README runbook; Vault is the declared destination — FUTURESTATE.md at the athens root)
+                name: todo-secrets  # materialized by ESO from Vault (secret/todo/<env> — see each overlay's externalsecret.yaml; write path = `vault kv put`, never kubectl)
           readinessProbe:
             httpGet: { path: /api/health, port: 3000 }
           livenessProbe:

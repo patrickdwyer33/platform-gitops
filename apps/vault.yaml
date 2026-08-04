@@ -1,0 +1,64 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "1" }
+spec:
+  project: default
+  source:
+    repoURL: https://helm.releases.hashicorp.com
+    chart: vault
+    targetRevision: "0.34.0"
+    helm:
+      releaseName: vault
+      values: |
+        server:
+          # 1 replica, deliberately (taher-core runs 3x3AZ HA; athens nodes are
+          # 2 shared Spot boxes in ONE AZ — availability comes from ESO caching
+          # + KMS auto-unseal instead). ha.enabled is the chart's *Raft mode*,
+          # not an HA claim.
+          ha:
+            enabled: true
+            replicas: 1
+            raft:
+              enabled: true
+              setNodeId: true
+              config: |
+                ui = true
+                disable_mlock = true
+                listener "tcp" {
+                  address = "[::]:8200"
+                  cluster_address = "[::]:8201"
+                  tls_disable = 1
+                }
+                storage "raft" {
+                  path = "/vault/data"
+                }
+                seal "awskms" {
+                  region     = "us-east-2"
+                  kms_key_id = "alias/vault-unseal"
+                }
+                service_registration "kubernetes" {}
+          dataStorage:
+            enabled: true
+            size: 10Gi
+            storageClass: gp3
+          resources:
+            requests: { memory: 256Mi, cpu: 100m }
+            limits: { memory: 512Mi }
+          serviceAccount:
+            annotations:
+              # IRSA: kms Encrypt/Decrypt/DescribeKey on alias/vault-unseal only
+              # (aws-infra/substrate/vault-irsa.tf). ACCOUNT-SPECIFIC.
+              eks.amazonaws.com/role-arn: arn:aws:iam::048751351548:role/vault-unseal
+        # No sidecar injector — consumption is ESO -> plain k8s Secrets, which
+        # keeps workloads alive through Vault outages (single replica on Spot).
+        injector:
+          enabled: false
+        ui:
+          enabled: true # no Ingress on purpose; reach via kubectl port-forward svc/vault-ui 8200
+  destination: { server: https://kubernetes.default.svc, namespace: vault }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]

@@ -18,9 +18,36 @@ Public GitOps repo reconciled by Argo CD into the `eks-substrate` cluster (app-o
 > see its README's "AWS accounts" section.
 ## Layout
 
-- `apps/` — Argo CD Application manifests (the app-of-apps children): the ingress stack (`aws-load-balancer-controller`, `cert-manager`, `cert-manager-config`, `traefik`) plus per-site apps: every site has a `-dev` app; draw and todo also run `-prod` apps. The static sites' prod overlays stay authored-but-undeployed (no `apps/<site>-prod.yaml`).
+- `apps/` — Argo CD Application manifests (the app-of-apps children): the ingress stack (`aws-load-balancer-controller`, `cert-manager`, `cert-manager-config`, `traefik`), the secrets stack (`storage`, `vault`, `vault-config-operator`, `external-secrets`, `vault-config` — see **Secrets** below), plus per-site apps: every site has a `-dev` app; draw and todo also run `-prod` apps. The static sites' prod overlays stay authored-but-undeployed (no `apps/<site>-prod.yaml`).
 - `workloads/<site>/` — Kustomize base plus `dev`/`prod` overlays per site. Each overlay pins an ECR image by `newTag`. `draw` and `todo` have matching Argo CD Applications in `apps/` for both `dev` and `prod`; the static sites remain dev-only — their `prod` overlays are authored but deliberately left undeployed (see the header comment in each `overlays/prod/kustomization.yaml`).
 - `deploy` — the deploy tool (bash). `./deploy <site> [<sha>]` picks a built image from ECR (the menu shows each tag's commit message), adds a `deployed-<env>-<sha>` protective tag, rewrites the dev overlay's `newTag`, and commits + pushes — Argo CD then rolls dev. `deploy.test.sh` unit-tests its `bump_tag`. **This is the only supported deploy path** — hand-editing an overlay skips the lifecycle protection (see below).
+
+## Secrets
+
+Truth lives in **Vault** (in-cluster, single replica, Raft on a gp3 PVC, KMS auto-unseal so
+Spot reclaims self-heal); workloads never talk to it. **External Secrets Operator** materializes
+Vault paths (`secret/<app>/<env>`) into ordinary k8s Secrets via each overlay's
+`externalsecret.yaml` — so app Deployments keep their plain `envFrom` contract, and a Vault
+outage is a non-event (the synced Secret persists). Vault's *configuration* (KV mount, policies,
+auth roles) is GitOps too: CRs in `infra/vault-config/`, reconciled into Vault API calls by the
+**vault-config-operator**. AWS-side pieces (unseal KMS key, IRSA roles, EBS CSI addon) are
+Terraform in `aws-infra` (`bootstrap/vault-unseal-key.tf`, `substrate/{vault-irsa,ebs-csi}.tf`).
+
+Three things are deliberately manual (the irreducible residue — everything else reconciles):
+
+1. `vault operator init` — once per Vault lifetime; recovery keys + root token go to the
+   password manager, nowhere else.
+2. `./vault-bootstrap grant` — the hand-cranked first turn: enables k8s auth and creates the
+   config operator's admin role using the root token. After it, git owns Vault config.
+3. Secret **values** — `vault kv put secret/<app>/<env> ...` (or `./vault-bootstrap migrate`
+   for the original todo cutover). Git carries the *shape* of secrets, never their contents —
+   this repo is public.
+
+Rotation = write new values to Vault; ESO refreshes within the hour (`kubectl annotate
+externalsecret ... force-sync=$(date +%s)` to hurry). Full-teardown posture is
+**secrets-are-cattle**: Vault data dies with the cluster (teardown.sh deletes the PVC on
+purpose) and is re-created from git + the shared password + cheap re-enrollment; the KMS key
+survives in `bootstrap/` so any raft snapshot ever taken stays restorable.
 
 ## Where images come from
 

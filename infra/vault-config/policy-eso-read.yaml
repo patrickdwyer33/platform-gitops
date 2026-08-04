@@ -1,0 +1,20 @@
+# What ESO may do in Vault: read app secrets, nothing else. (KV v2 puts data
+# under secret/data/... and listing under secret/metadata/... — both needed.)
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: Policy
+metadata:
+  name: eso-read
+spec:
+  authentication:
+    path: kubernetes
+    role: vault-admin
+    serviceAccount: { name: vault-admin }
+  connection: { address: "http://vault.vault.svc:8200" }
+  type: acl
+  policy: |
+    path "secret/data/*" {
+      capabilities = ["read"]
+    }
+    path "secret/metadata/*" {
+      capabilities = ["read", "list"]
+    }

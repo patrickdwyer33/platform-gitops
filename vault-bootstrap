@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# One-time Vault bootstrap + secrets migration for athens.
+#
+#   ./vault-bootstrap grant     -- the hand-cranked first turn: enable k8s auth
+#                                  and create the vault-config-operator's admin
+#                                  role, using the ROOT token. After this, ALL
+#                                  Vault config is reconciled from git
+#                                  (infra/vault-config/, apps/vault-config.yaml).
+#   ./vault-bootstrap migrate   -- copy the existing hand-made todo-secrets
+#                                  (dev + prod) into Vault at secret/todo/<env>.
+#                                  Values never touch this terminal.
+#
+# Both need: an `aws login --profile personal` session and the vault pod up +
+# unsealed (KMS auto-unseal does that on its own). Run grant BEFORE migrate.
+# Idempotent: safe to re-run (e.g. after a rebuild-from-zero; see README).
+
+# A stray KUBECONFIG has repeatedly pointed kubectl at the wrong cluster in
+# this project. Force it to the default (~/.kube/config) resolution.
+unset KUBECONFIG
+
+MODE="${1:-}"
+[[ "$MODE" == "grant" || "$MODE" == "migrate" ]] || {
+  echo "usage: $0 grant|migrate" >&2
+  exit 1
+}
+
+# Root token from the operator's password manager (created by `vault operator
+# init`). Read silently; NEVER echoed, NEVER written to disk. It does appear in
+# the env of short-lived `vault` processes inside the vault pod itself, which
+# is the pod that owns the token anyway.
+if [[ -z "${VAULT_ROOT_TOKEN:-}" ]]; then
+  read -r -s -p "Vault root token: " VAULT_ROOT_TOKEN
+  echo
+fi
+
+# All vault CLI work happens INSIDE the vault pod (no port-forward, no local
+# vault binary). -i pipes stdin through for policy bodies and secret JSON.
+vexec() {
+  kubectl -n vault exec -i vault-0 -- \
+    env VAULT_TOKEN="$VAULT_ROOT_TOKEN" VAULT_ADDR="http://127.0.0.1:8200" \
+    vault "$@"
+}
+
+if [[ "$MODE" == "grant" ]]; then
+  echo "1/3 Enabling the kubernetes auth method (no-op if already enabled)..."
+  vexec auth enable kubernetes 2>/dev/null || true
+  vexec auth list | grep -q '^kubernetes/' || { echo "ERROR: kubernetes auth not enabled" >&2; exit 1; }
+  # Vault validates client JWTs by calling the k8s TokenReview API with its own
+  # ServiceAccount (the chart's authDelegator binding grants that standing
+  # permission) — so host is the only config needed.
+  vexec write auth/kubernetes/config kubernetes_host="https://kubernetes.default.svc:443"
+
+  echo "2/3 Writing the vault-config-operator's admin policy..."
+  # Scoped to what reconciling infra/vault-config/ requires — mounts, ACL
+  # policies, k8s-auth roles, sys/auth read (accessor templating) — NOT a
+  # blanket root. Growing the CR set may mean growing this policy (re-run).
+  vexec policy write vault-config-operator - <<'HCL'
+path "sys/mounts" {
+  capabilities = ["read", "list"]
+}
+path "sys/mounts/*" {
+  capabilities = ["create", "read", "update", "delete", "list"]
+}
+path "sys/policies/acl" {
+  capabilities = ["read", "list"]
+}
+path "sys/policies/acl/*" {
+  capabilities = ["create", "read", "update", "delete", "list"]
+}
+path "auth/kubernetes/role/*" {
+  capabilities = ["create", "read", "update", "delete", "list"]
+}
+path "sys/auth" {
+  capabilities = ["read"]
+}
+HCL
+
+  echo "3/3 Binding the policy to the operator's identity (SA vault-admin, ns vault-admin)..."
+  vexec write auth/kubernetes/role/vault-admin \
+    bound_service_account_names=vault-admin \
+    bound_service_account_namespaces=vault-admin \
+    policies=vault-config-operator \
+    ttl=1h
+  echo "Done. Argo's vault-config app will now converge (watch: kubectl get policies,secretenginemounts,kubernetesauthengineroles -n vault-admin)."
+fi
+
+if [[ "$MODE" == "migrate" ]]; then
+  for ENV in dev prod; do
+    echo "Migrating $ENV/todo-secrets -> secret/todo/$ENV (values stay off this terminal)..."
+    kubectl -n "$ENV" get secret todo-secrets -o json \
+      | jq '.data | map_values(@base64d)' \
+      | vexec kv put "secret/todo/$ENV" @/dev/stdin >/dev/null
+    echo "  keys now in Vault:"
+    vexec kv get -format=json "secret/todo/$ENV" | jq -r '.data.data | keys[]' | sed 's/^/    /'
+  done
+  cat <<'EOF'
+Migration written. Cutover (per namespace, after the ExternalSecrets are synced):
+  kubectl -n dev  delete secret todo-secrets   # ESO recreates it from Vault within seconds
+  kubectl -n prod delete secret todo-secrets
+(Deleting is required once: ESO's creationPolicy=Owner refuses to adopt a
+Secret it didn't create. Running pods keep their env; only new pods read the
+recreated Secret — values are identical, so nothing restarts or logs out.)
+Verify: kubectl -n dev get externalsecret todo-secrets   # STATUS SecretSynced
+EOF
+fi

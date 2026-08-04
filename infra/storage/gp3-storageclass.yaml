@@ -1,0 +1,17 @@
+# The cluster's first StorageClass — a *recipe* for EBS volumes, consumed by
+# PVCs (first consumer: Vault's Raft storage). The EBS CSI driver that acts on
+# it is an EKS addon (aws-infra/substrate/eks.tf), not an Argo app.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  encrypted: "true" # at rest via the account's default aws/ebs KMS key — free, no extra IAM
+# Create the EBS volume only when a pod is actually scheduled, so the volume
+# lands in that pod's AZ. Moot while nodes are pinned to AZ-a, but it's the
+# correct guard if the pinning ever changes.
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete # deleting the PVC deletes the real volume — teardown.sh step 4 relies on this

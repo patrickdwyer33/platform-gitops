@@ -1,0 +1,20 @@
+# Vault's *configuration* as GitOps: CRs reconciled into Vault API calls by the
+# vault-config-operator. Wave 2 (operator + ESO arrive at wave 1); stays
+# Degraded until the one-time `./vault-bootstrap grant` has run — self-heals.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault-config
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "2" }
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/patrickdwyer33/platform-gitops.git
+    targetRevision: main
+    path: infra/vault-config
+  destination: { server: https://kubernetes.default.svc, namespace: vault-admin }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, SkipDryRunOnMissingResource=true]
+    retry: { limit: 10, backoff: { duration: 15s, factor: 2, maxDuration: 5m } }

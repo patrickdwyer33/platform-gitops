@@ -1,0 +1,17 @@
+# Vault k8s-auth role `eso`: ONLY the external-secrets ServiceAccount in the
+# external-secrets namespace may log in with it, and it grants only eso-read.
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: KubernetesAuthEngineRole
+metadata:
+  name: eso
+spec:
+  authentication:
+    path: kubernetes
+    role: vault-admin
+    serviceAccount: { name: vault-admin }
+  connection: { address: "http://vault.vault.svc:8200" }
+  path: kubernetes
+  policies: [eso-read]
+  targetServiceAccounts: [external-secrets]
+  targetNamespaces:
+    targetNamespaces: [external-secrets]
