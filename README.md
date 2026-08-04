@@ -49,6 +49,13 @@ externalsecret ... force-sync=$(date +%s)` to hurry). Full-teardown posture is
 purpose) and is re-created from git + the shared password + cheap re-enrollment; the KMS key
 survives in `bootstrap/` so any raft snapshot ever taken stays restorable.
 
+Key-ceremony gotcha (bit us 2026-08-04): Vault ≥2.0 authenticates the rekey and
+generate-root endpoints by default. To run one (e.g. `vault operator rekey -target=recovery`),
+temporarily add `enable_unauthenticated_access = ["rekey"]` to the server config in
+`apps/vault.yaml`, restart the pod, do the ceremony **in a real terminal** (key material must
+never land in a session transcript), then revert. Recovery keys are 3-of-5 Shamir shares —
+save all five; fewer than three saved is the same as zero.
+
 ## Where images come from
 
 This repo does **not** build images. Each site's own repo (`patrickdwyer33/<site>`) builds and pushes `<ecr-repo>:<git-sha>` to ECR on push to `main`, keyless via GitHub OIDC (the `github-ecr-push` role — defined in `aws-infra/substrate/github-ci.tf`). **CI stops at "image in ECR"; it never writes to this repo.** Promotion is the deliberate, manual `./deploy` step above.
