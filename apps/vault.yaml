@@ -40,6 +40,13 @@ spec:
                   kms_key_id = "alias/vault-unseal"
                 }
                 service_registration "kubernetes" {}
+                # TEMPORARY (2026-08-03): Vault 2.0 authenticates the rekey
+                # endpoints by default; opened for the one-time recovery-key
+                # rotation (the initial root token is revoked, so authenticated
+                # rekey would need a generate-root ceremony instead). The rekey
+                # API is still self-authorizing via the existing key shares.
+                # REVERT this line as soon as the rekey completes.
+                enable_unauthenticated_access = ["rekey"]
           dataStorage:
             enabled: true
             size: 10Gi
