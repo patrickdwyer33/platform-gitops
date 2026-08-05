@@ -21,6 +21,13 @@ spec:
           ha:
             enabled: true
             replicas: 1
+            # No PDB: the chart's HA-mode default computes maxUnavailable 0 for
+            # 1 replica — permanently undrainable, which failed the first EKS
+            # node-group upgrade (PodEvictionFailure, 2026-08-05). Polite drains
+            # may kill vault-0; Spot reclaims already do, and the platform is
+            # built to shrug that off (KMS auto-unseal, ESO-cached Secrets).
+            disruptionBudget:
+              enabled: false
             raft:
               enabled: true
               setNodeId: true
