@@ -17,4 +17,4 @@ patches:
 images:
   - name: todo
     newName: 048751351548.dkr.ecr.us-east-2.amazonaws.com/todo
-    newTag: "1ad617d"
+    newTag: "75e2985"
