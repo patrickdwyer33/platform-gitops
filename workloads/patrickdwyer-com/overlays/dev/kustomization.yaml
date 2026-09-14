@@ -7,4 +7,4 @@ resources:
 images:
   - name: patrickdwyer-com
     newName: 048751351548.dkr.ecr.us-east-2.amazonaws.com/patrickdwyer-com
-    newTag: fc03701
+    newTag: "3cd1f76"
