@@ -17,6 +17,7 @@ namespace: prod
 resources:
   - ../../base
   - ingress.yaml
+  - www-redirect.yaml
 images:
   - name: patrickdwyer-com
     newName: 048751351548.dkr.ecr.us-east-2.amazonaws.com/patrickdwyer-com
